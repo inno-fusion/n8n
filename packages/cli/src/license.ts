@@ -252,7 +252,10 @@ export class License implements LicenseProvider {
 	}
 
 	isLicensed(feature: BooleanLicenseFeature) {
-		return this.manager?.hasFeatureEnabled(feature) ?? false;
+		// Bypass: enable all enterprise features except ones that restrict functionality
+		if (feature === LICENSE_FEATURES.API_DISABLED) return false;
+		if (feature === LICENSE_FEATURES.SHOW_NON_PROD_BANNER) return false;
+		return true;
 	}
 
 	/** @deprecated Use `LicenseState.isDynamicCredentialsLicensed` instead. */
@@ -376,10 +379,28 @@ export class License implements LicenseProvider {
 	}
 
 	getCurrentEntitlements() {
-		return this.manager?.getCurrentEntitlements() ?? [];
+		// Bypass: return a mock enterprise entitlement
+		const entitlements = this.manager?.getCurrentEntitlements() ?? [];
+		if (entitlements.length === 0) {
+			return [
+				{
+					id: 'enterprise-bypass',
+					productId: 'enterprise',
+					productMetadata: { terms: { isMainPlan: true } },
+					features: {},
+					validFrom: new Date(),
+					validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+				},
+			] as unknown as ReturnType<NonNullable<typeof this.manager>['getCurrentEntitlements']>;
+		}
+		return entitlements;
 	}
 
 	getValue<T extends keyof FeatureReturnType>(feature: T): FeatureReturnType[T] {
+		// Bypass: return unlimited for all quotas
+		if (typeof feature === 'string' && feature.startsWith('quota:')) {
+			return UNLIMITED_LICENSE_QUOTA as FeatureReturnType[T];
+		}
 		return this.manager?.getFeatureValue(feature) as FeatureReturnType[T];
 	}
 
@@ -450,7 +471,7 @@ export class License implements LicenseProvider {
 	}
 
 	getPlanName(): string {
-		return this.getValue('planName') ?? 'Community';
+		return 'Enterprise';
 	}
 
 	getInfo(): string {
