@@ -22,7 +22,7 @@ const excludeTestController =
 $.verbose = !isCI;
 process.env.FORCE_COLOR = isCI ? '0' : '1';
 
-const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+const scriptDir = path.dirname(decodeURIComponent(new URL(import.meta.url).pathname));
 const isInScriptsDir = path.basename(scriptDir) === 'scripts';
 const rootDir = isInScriptsDir ? path.join(scriptDir, '..') : scriptDir;
 

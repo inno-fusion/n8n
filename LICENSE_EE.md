@@ -1,27 +1,34 @@
-# The n8n Enterprise License (the “Enterprise License”)
+Open Freedom License
+Version 1.0
 
-Copyright (c) 2022-present n8n GmbH.
+Copyright (c) [YEAR] [AUTHOR/ORGANIZATION]
 
-With regard to the n8n Software:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge, publish, distribute, sublicense, sell, and otherwise do
+anything with the Software for any purpose, including commercial purposes.
 
-This software and associated documentation files (the "Software") may only be used in production, if
-you (and any entity that you represent) hold a valid n8n Enterprise license corresponding to your
-usage. Subject to the foregoing sentence, you are free to modify this Software and publish patches
-to the Software. You agree that n8n and/or its licensors (as applicable) retain all right, title and
-interest in and to all such modifications and/or patches, and all such modifications and/or patches
-may only be used, copied, modified, displayed, distributed, or otherwise exploited with a valid n8n
-Enterprise license for the corresponding usage. Notwithstanding the foregoing, you may copy and
-modify the Software for development and testing purposes, without requiring a subscription. You
-agree that n8n and/or its licensors (as applicable) retain all right, title and interest in and to
-all such modifications. You are not granted any other rights beyond what is expressly stated herein.
-Subject to the foregoing, it is forbidden to copy, merge, publish, distribute, sublicense, and/or
-sell the Software.
+You are free to:
+- Use the Software for any purpose.
+- Modify the Software.
+- Distribute original or modified versions.
+- Sell copies or services based on the Software.
+- Integrate it into proprietary or open-source projects.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
-NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
-OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+Conditions:
+1. The above copyright notice and this permission notice must be included
+   in all copies or substantial portions of the Software.
+2. Any modifications should be clearly indicated (optional but recommended).
 
-For all third party components incorporated into the n8n Software, those components are licensed
-under the original license provided by the owner of the applicable component.
+Disclaimer:
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+NONINFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
