@@ -31,20 +31,19 @@ export class LicenseState {
 	 * If the feature is an array of strings, it checks if any of the features are licensed
 	 */
 	isLicensed(feature: BooleanLicenseFeature | BooleanLicenseFeature[]) {
-		this.assertProvider();
-
-		if (typeof feature === 'string') return this.licenseProvider.isLicensed(feature);
-
-		for (const featureName of feature) {
-			if (this.licenseProvider.isLicensed(featureName)) {
-				return true;
-			}
-		}
-
-		return false;
+		// Bypass: enable all enterprise features except ones that restrict functionality.
+		const features = Array.isArray(feature) ? feature : [feature];
+		if (features.includes(LICENSE_FEATURES.API_DISABLED)) return false;
+		if (features.includes(LICENSE_FEATURES.SHOW_NON_PROD_BANNER)) return false;
+		return true;
 	}
 
 	getValue<T extends keyof FeatureReturnType>(feature: T): FeatureReturnType[T] {
+		// Bypass: return unlimited for all quotas.
+		if (typeof feature === 'string' && feature.startsWith('quota:')) {
+			return UNLIMITED_LICENSE_QUOTA as FeatureReturnType[T];
+		}
+
 		this.assertProvider();
 
 		return this.licenseProvider.getValue(feature);
