@@ -46,6 +46,7 @@ COPY --from=build /app/compiled/THIRD_PARTY_LICENSES.md /THIRD_PARTY_LICENSES.md
 COPY docker/images/n8n/docker-entrypoint.sh /
 
 RUN chmod 755 /docker-entrypoint.sh \
+ && mkdir -p /usr/local/bin \
  && ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n \
  && mkdir -p /home/node/.n8n \
  && chown -R node:node /home/node \
