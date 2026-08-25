@@ -1,7 +1,7 @@
 ARG NODE_VERSION=24.18.1
 ARG N8N_VERSION=snapshot
 
-FROM node:${NODE_VERSION}-alpine AS build
+FROM node:${NODE_VERSION}-alpine3.24 AS build
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
@@ -24,11 +24,28 @@ RUN printf 'Third-party license report generation was skipped during automated f
 RUN NODE_ENV=production DOCKER_BUILD=true pnpm --filter=n8n --prod --legacy deploy --no-optional ./compiled \
  && cp packages/cli/THIRD_PARTY_LICENSES.md compiled/THIRD_PARTY_LICENSES.md
 
-FROM node:${NODE_VERSION}-alpine AS builder
-RUN apk add --no-cache python3 make g++
+FROM node:${NODE_VERSION}-alpine3.24 AS toolchain
+RUN apk add --no-cache python3 make g++ libc6-compat
+
+FROM toolchain AS native-builder
+COPY --from=build /app/compiled/node_modules/.pnpm/isolated-vm@*/node_modules/isolated-vm /build/isolated-vm
+WORKDIR /build/isolated-vm
+# DHI/Alpine detection can select crashing prebuilds on ARM64. Compile the binding in-image.
+RUN rm -rf prebuilds \
+ && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --release -j max
+
+FROM toolchain AS builder
 COPY --from=build /app/compiled /usr/local/lib/node_modules/n8n
-RUN cd /usr/local/lib/node_modules/n8n \
- && npm rebuild sqlite3 isolated-vm \
+RUN cd /usr/local/lib/node_modules/n8n/node_modules/sqlite3 \
+ && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --release
+RUN if ls /usr/local/lib/node_modules/n8n/node_modules/.pnpm/@confluentinc+kafka-javascript@*/node_modules/@confluentinc/kafka-javascript >/dev/null 2>&1; then \
+      apk add --no-cache librdkafka-dev && \
+      cd /usr/local/lib/node_modules/n8n/node_modules/.pnpm/@confluentinc+kafka-javascript@*/node_modules/@confluentinc/kafka-javascript && \
+      BUILD_LIBRDKAFKA=0 node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --release; \
+    fi
+COPY --from=native-builder /build/isolated-vm/build/Release/isolated_vm.node \
+     /usr/local/lib/node_modules/n8n/node_modules/isolated-vm/build/Release/isolated_vm.node
+RUN rm -rf /usr/local/lib/node_modules/n8n/node_modules/isolated-vm/prebuilds \
  && chmod -R a+rX /usr/local/lib/node_modules/n8n
 
 FROM n8nio/base:${NODE_VERSION}
