@@ -1,6 +1,7 @@
 import type { Logger } from '@n8n/backend-common';
 import { mockLogger } from '@n8n/backend-test-utils';
 import type { GlobalConfig } from '@n8n/config';
+import { LICENSE_FEATURES, LICENSE_QUOTAS, UNLIMITED_LICENSE_QUOTA } from '@n8n/constants';
 import type { SettingsRepository } from '@n8n/db';
 import { LicenseManager } from '@n8n_io/license-sdk';
 import type { InstanceSettings } from 'n8n-core';
@@ -128,15 +129,13 @@ describe('License', () => {
 	});
 
 	test('check if feature is enabled', () => {
-		license.isLicensed(MOCK_FEATURE_FLAG);
-
-		expect(LicenseManager.prototype.hasFeatureEnabled).toHaveBeenCalledWith(MOCK_FEATURE_FLAG);
+		expect(license.isLicensed(MOCK_FEATURE_FLAG)).toBe(true);
+		expect(LicenseManager.prototype.hasFeatureEnabled).not.toHaveBeenCalled();
 	});
 
 	test('check if sharing feature is enabled', () => {
-		license.isLicensed(MOCK_FEATURE_FLAG);
-
-		expect(LicenseManager.prototype.hasFeatureEnabled).toHaveBeenCalledWith(MOCK_FEATURE_FLAG);
+		expect(license.isLicensed(MOCK_FEATURE_FLAG)).toBe(true);
+		expect(LicenseManager.prototype.hasFeatureEnabled).not.toHaveBeenCalled();
 	});
 
 	test('check fetching entitlements', () => {
@@ -146,9 +145,36 @@ describe('License', () => {
 	});
 
 	test('check fetching feature values', async () => {
-		license.getValue(MOCK_FEATURE_FLAG);
-
+		expect(license.getValue(MOCK_FEATURE_FLAG)).toBeUndefined();
 		expect(LicenseManager.prototype.getFeatureValue).toHaveBeenCalledWith(MOCK_FEATURE_FLAG);
+	});
+
+	test('enables every enterprise feature except restrictive flags', () => {
+		for (const feature of Object.values(LICENSE_FEATURES)) {
+			const expected =
+				feature !== LICENSE_FEATURES.API_DISABLED &&
+				feature !== LICENSE_FEATURES.SHOW_NON_PROD_BANNER;
+			expect(license.isLicensed(feature)).toBe(expected);
+		}
+	});
+
+	test('returns unlimited values for every license quota', () => {
+		for (const quota of Object.values(LICENSE_QUOTAS)) {
+			expect(license.getValue(quota)).toBe(UNLIMITED_LICENSE_QUOTA);
+		}
+	});
+
+	test('reports the Enterprise plan and synthesizes a main entitlement without a license', () => {
+		vi.mocked(LicenseManager.prototype.getCurrentEntitlements).mockReturnValue([]);
+
+		expect(license.getPlanName()).toBe('Enterprise');
+		expect(license.getCurrentEntitlements()).toEqual([
+			expect.objectContaining({
+				id: 'enterprise-bypass',
+				productId: 'enterprise',
+				productMetadata: { terms: { isMainPlan: true } },
+			}),
+		]);
 	});
 
 	test('check management jwt', async () => {
