@@ -11,7 +11,7 @@ ENV CI=true
 ENV NODE_OPTIONS=--max-old-space-size=8192
 
 RUN apk add --no-cache python3 make g++ git libc6-compat \
- && corepack enable
+ && npm install --global pnpm@11.25.0
 
 WORKDIR /app
 COPY . .
