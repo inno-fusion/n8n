@@ -1,7 +1,9 @@
-ARG NODE_VERSION=24.14.1
+ARG NODE_VERSION=26.7.0
 ARG N8N_VERSION=snapshot
+ARG BUILDER_IMAGE=node:26.7.0-alpine3.24@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019
+ARG RUNTIME_IMAGE=n8nio/base:26.7.0@sha256:33687300c4e94dc00f42ec79ae15082ae07330ecd82ae1167125905b65908ff8
 
-FROM node:${NODE_VERSION}-alpine AS build
+FROM ${BUILDER_IMAGE} AS build
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
@@ -24,14 +26,32 @@ RUN printf 'Third-party license report generation was skipped during automated f
 RUN NODE_ENV=production DOCKER_BUILD=true pnpm --filter=n8n --prod --legacy deploy --no-optional ./compiled \
  && cp packages/cli/THIRD_PARTY_LICENSES.md compiled/THIRD_PARTY_LICENSES.md
 
-FROM node:${NODE_VERSION}-alpine AS builder
-RUN apk add --no-cache python3 make g++
-COPY --from=build /app/compiled /usr/local/lib/node_modules/n8n
-RUN cd /usr/local/lib/node_modules/n8n \
- && npm rebuild sqlite3 isolated-vm \
- && chmod -R a+rX /usr/local/lib/node_modules/n8n
+# Build native modules for the exact runtime Node/Alpine ABI.
+FROM ${BUILDER_IMAGE} AS native-builder
+RUN apk add --no-cache python3 make g++ librdkafka-dev
+ENV NODE_GYP=/usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js
 
-FROM n8nio/base:${NODE_VERSION}
+COPY --from=build /app/compiled/node_modules/.pnpm/isolated-vm@*/node_modules/isolated-vm /build/isolated-vm
+WORKDIR /build/isolated-vm
+RUN rm -rf prebuilds && node "$NODE_GYP" rebuild --release -j max
+
+COPY --from=build /app/compiled/node_modules/.pnpm/sqlite3@*/node_modules/node-addon-api /build/node_modules/node-addon-api
+COPY --from=build /app/compiled/node_modules/.pnpm/sqlite3@*/node_modules/tar /build/node_modules/tar
+COPY --from=build /app/compiled/node_modules/.pnpm/tar@*/node_modules/@isaacs/fs-minipass /build/node_modules/@isaacs/fs-minipass
+COPY --from=build /app/compiled/node_modules/.pnpm/tar@*/node_modules/chownr /build/node_modules/chownr
+COPY --from=build /app/compiled/node_modules/.pnpm/tar@*/node_modules/minipass /build/node_modules/minipass
+COPY --from=build /app/compiled/node_modules/.pnpm/tar@*/node_modules/minizlib /build/node_modules/minizlib
+COPY --from=build /app/compiled/node_modules/.pnpm/tar@*/node_modules/yallist /build/node_modules/yallist
+COPY --from=build /app/compiled/node_modules/.pnpm/sqlite3@*/node_modules/sqlite3 /build/node_modules/sqlite3
+WORKDIR /build/node_modules/sqlite3
+RUN node "$NODE_GYP" rebuild --release
+
+COPY --from=build /app/compiled/node_modules/.pnpm/@confluentinc+kafka-javascript@*/node_modules/nan /build/node_modules/nan
+COPY --from=build /app/compiled/node_modules/.pnpm/@confluentinc+kafka-javascript@*/node_modules/@confluentinc/kafka-javascript /build/node_modules/@confluentinc/kafka-javascript
+WORKDIR /build/node_modules/@confluentinc/kafka-javascript
+RUN BUILD_LIBRDKAFKA=0 node "$NODE_GYP" rebuild --release
+
+FROM ${RUNTIME_IMAGE}
 
 ARG N8N_VERSION
 ARG N8N_RELEASE_TYPE=dev
@@ -41,16 +61,28 @@ ENV SHELL=/bin/sh
 
 WORKDIR /home/node
 
-COPY --from=builder /usr/local/lib/node_modules/n8n /usr/local/lib/node_modules/n8n
+COPY --from=build /app/compiled /usr/local/lib/node_modules/n8n
 COPY --from=build /app/compiled/THIRD_PARTY_LICENSES.md /THIRD_PARTY_LICENSES.md
 COPY docker/images/n8n/docker-entrypoint.sh /
 
-RUN chmod 755 /docker-entrypoint.sh \
- && mkdir -p /usr/local/bin \
- && ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n \
- && mkdir -p /home/node/.n8n \
- && chown -R node:node /home/node \
- && rm -rf /root/.npm /tmp/*
+COPY --from=native-builder /build/node_modules/sqlite3/build/Release/node_sqlite3.node \
+     /usr/local/lib/node_modules/n8n/node_modules/sqlite3/build/Release/node_sqlite3.node
+COPY --from=native-builder /build/isolated-vm/build/Release/isolated_vm.node \
+     /usr/local/lib/node_modules/n8n/node_modules/isolated-vm/build/Release/isolated_vm.node
+COPY --from=native-builder /build/node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node /tmp/
+
+RUN set -e; \
+    N8N=/usr/local/lib/node_modules/n8n; \
+    kafka=$(echo "$N8N"/node_modules/.pnpm/@confluentinc+kafka-javascript@*/node_modules/@confluentinc/kafka-javascript); \
+    install -D /tmp/confluent-kafka-javascript.node "$kafka/build/Release/confluent-kafka-javascript.node"; \
+    rm -rf "$N8N"/node_modules/.pnpm/isolated-vm@*/node_modules/isolated-vm/prebuilds; \
+    chmod -R a+rX "$N8N"; \
+    chmod 755 /docker-entrypoint.sh; \
+    mkdir -p /usr/local/bin; \
+    ln -s "$N8N/bin/n8n" /usr/local/bin/n8n; \
+    mkdir -p /home/node/.n8n; \
+    chown -R node:node /home/node; \
+    rm -rf /root/.npm /tmp/*
 
 EXPOSE 5678/tcp
 USER node
@@ -58,6 +90,6 @@ ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
 
 LABEL org.opencontainers.image.title="n8n" \
       org.opencontainers.image.description="Workflow Automation Tool" \
-      org.opencontainers.image.source="https://github.com/n8n-io/n8n" \
+      org.opencontainers.image.source="https://github.com/inno-fusion/n8n" \
       org.opencontainers.image.url="https://n8n.io" \
       org.opencontainers.image.version=${N8N_VERSION}
