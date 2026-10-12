@@ -1,4 +1,10 @@
 .git
-node_modules
+**/node_modules
 compiled
 dist
+**/.turbo
+.agent-setup
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example

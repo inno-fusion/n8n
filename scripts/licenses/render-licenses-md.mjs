@@ -34,7 +34,9 @@ function isFirstParty(purl) {
 
 function licenseKey(licenses) {
 	if (!licenses || licenses.length === 0) return null;
-	const parts = licenses.map((l) => l.expression ?? l.license?.id ?? l.license?.name).filter(Boolean);
+	const parts = licenses
+		.map((l) => l.expression ?? l.license?.id ?? l.license?.name)
+		.filter(Boolean);
 	if (parts.length === 0) return null;
 	if (parts.length === 1) return parts[0];
 	// Per CycloneDX, multiple licenses[] entries on a single component represent
@@ -141,7 +143,10 @@ The n8n software includes open source packages, libraries, and modules, each of 
 `;
 
 	for (const key of sortedKeys) {
-		const packages = groups.get(key).slice().sort((a, b) => a.name.localeCompare(b.name));
+		const packages = groups
+			.get(key)
+			.slice()
+			.sort((a, b) => a.name.localeCompare(b.name));
 		doc += `## ${key}\n\n`;
 		for (const pkg of packages) {
 			const copyright = pkg.copyright ? `, ${pkg.copyright}` : '';
@@ -171,7 +176,11 @@ is distributed inside its \`node_modules/\` directory in the n8n release artefac
 	return doc;
 }
 
-export async function renderSbom(sbom, overrides, { readDiskText } = {}) {
+export async function renderSbom(
+	sbom,
+	overrides,
+	{ readDiskText, skipFirstParty = isFirstParty } = {},
+) {
 	const groups = new Map();
 	const texts = new Map();
 	const unresolved = [];
@@ -180,7 +189,7 @@ export async function renderSbom(sbom, overrides, { readDiskText } = {}) {
 	let skippedFirstParty = 0;
 
 	for (const rawComponent of sbom.components ?? []) {
-		if (isFirstParty(rawComponent.purl)) {
+		if (skipFirstParty(rawComponent.purl)) {
 			skippedFirstParty++;
 			continue;
 		}
@@ -190,7 +199,9 @@ export async function renderSbom(sbom, overrides, { readDiskText } = {}) {
 		const key = licenseKey(component.licenses);
 
 		if (!key) {
-			unresolved.push(`${qualifiedName(rawComponent)}@${rawComponent.version}\t${rawComponent.purl}`);
+			unresolved.push(
+				`${qualifiedName(rawComponent)}@${rawComponent.version}\t${rawComponent.purl}`,
+			);
 			continue;
 		}
 

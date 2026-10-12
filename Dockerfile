@@ -10,8 +10,8 @@ ENV PATH=${PNPM_HOME}:${PATH}
 ENV CI=true
 ENV NODE_OPTIONS=--max-old-space-size=8192
 
-RUN apk add --no-cache python3 make g++ git libc6-compat \
- && npm install --global pnpm@11.25.0
+RUN apk add --no-cache bash python3 make g++ git libc6-compat \
+ && npm install --global pnpm@12.4.2
 
 WORKDIR /app
 COPY . .
@@ -20,11 +20,12 @@ RUN git init \
  && git config user.email dyaus@inno-fusion.com \
  && git config user.name Dyaus
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm build --summarize
-RUN printf 'Third-party license report generation was skipped during automated fork build.\n' > packages/cli/THIRD_PARTY_LICENSES.md
-RUN NODE_ENV=production DOCKER_BUILD=true pnpm --filter=n8n --prod --legacy deploy --no-optional ./compiled \
- && cp packages/cli/THIRD_PARTY_LICENSES.md compiled/THIRD_PARTY_LICENSES.md
+RUN test "$(node -p 'require("./package.json").packageManager')" = "pnpm@$(pnpm --version)" \
+ && pnpm install --frozen-lockfile
+RUN pnpm build --summarize --concurrency=2
+# Use the release deploy path. It keeps workspace packages and runtime assets intact.
+RUN N8N_GENERATE_LICENSES=false pnpm build:deploy \
+ && node scripts/fork-runtime-licenses.mjs compiled
 
 # Build native modules for the exact runtime Node/Alpine ABI.
 FROM ${BUILDER_IMAGE} AS native-builder
