@@ -8,8 +8,12 @@ import { ASSISTANT_CLOUD_UBB_GA_DATE, useCloudUbbActive } from './useCloudUbbAct
 
 let settingsStore: ReturnType<typeof useSettingsStore>;
 
-const settingsFor = ({ cloudUbbEnabled = false }: { cloudUbbEnabled?: boolean } = {}) =>
+const settingsFor = ({
+	deploymentType = 'cloud',
+	cloudUbbEnabled = false,
+}: { deploymentType?: string; cloudUbbEnabled?: boolean } = {}) =>
 	mock<FrontendSettings>({
+		deployment: { type: deploymentType },
 		aiAssistant: { enabled: true, setup: true, cloudUbbEnabled },
 	});
 
@@ -26,7 +30,7 @@ describe('useCloudUbbActive', () => {
 		vi.useRealTimers();
 	});
 
-	test('is true when the entitlement flag is set, before GA', () => {
+	test('is true on cloud when the entitlement flag is set, before GA', () => {
 		settingsStore.setSettings(settingsFor({ cloudUbbEnabled: true }));
 
 		const { isActive } = useCloudUbbActive();
@@ -34,7 +38,7 @@ describe('useCloudUbbActive', () => {
 		expect(isActive.value).toBe(true);
 	});
 
-	test('is false when the entitlement flag is not set, before GA', () => {
+	test('is false on cloud when the entitlement flag is not set, before GA', () => {
 		settingsStore.setSettings(settingsFor({ cloudUbbEnabled: false }));
 
 		const { isActive } = useCloudUbbActive();
@@ -42,19 +46,39 @@ describe('useCloudUbbActive', () => {
 		expect(isActive.value).toBe(false);
 	});
 
-	test('is true at or past GA even without the entitlement flag', () => {
-		settingsStore.setSettings(settingsFor({ cloudUbbEnabled: false }));
-		vi.setSystemTime(ASSISTANT_CLOUD_UBB_GA_DATE);
+	describe.each([
+		{ period: 'before GA', date: new Date('2026-09-15T00:00:00Z'), pastGa: false },
+		{ period: 'at GA', date: ASSISTANT_CLOUD_UBB_GA_DATE, pastGa: true },
+		{ period: 'after GA', date: new Date('2026-10-02T00:00:00Z'), pastGa: true },
+	])('$period', ({ date, pastGa }) => {
+		test.each([false, true])(
+			'is false on self-hosted deployments with cloudUbbEnabled=%s',
+			(cloudUbbEnabled) => {
+				settingsStore.setSettings(settingsFor({ deploymentType: 'default', cloudUbbEnabled }));
+				vi.setSystemTime(date);
 
-		const { isActive } = useCloudUbbActive();
+				const { isActive } = useCloudUbbActive();
 
-		expect(isActive.value).toBe(true);
+				expect(isActive.value).toBe(false);
+			},
+		);
+
+		if (pastGa) {
+			test.each([false, true])('is true on cloud with cloudUbbEnabled=%s', (cloudUbbEnabled) => {
+				settingsStore.setSettings(settingsFor({ cloudUbbEnabled }));
+				vi.setSystemTime(date);
+
+				const { isActive } = useCloudUbbActive();
+
+				expect(isActive.value).toBe(true);
+			});
+		}
 	});
 
 	// A tab kept open across the GA cutoff must flip on its own; `useNow` is why
 	// this composable exists over a plain `Date.now()`. Mount before GA, then
 	// advance the fake clock past it and past one poll interval to trigger the tick.
-	test('reactively flips isActive when the clock crosses GA while mounted', async () => {
+	test('reactively activates cloud when the clock crosses GA while mounted', async () => {
 		settingsStore.setSettings(settingsFor({ cloudUbbEnabled: false }));
 
 		const { isActive } = useCloudUbbActive();
@@ -63,6 +87,46 @@ describe('useCloudUbbActive', () => {
 		vi.setSystemTime(new Date(ASSISTANT_CLOUD_UBB_GA_DATE.getTime() + 1_000));
 		await vi.advanceTimersByTimeAsync(60_000);
 
+		expect(isActive.value).toBe(true);
+	});
+
+	test.each([false, true])(
+		'keeps self-hosted deployments inactive across GA with cloudUbbEnabled=%s',
+		async (cloudUbbEnabled) => {
+			settingsStore.setSettings(settingsFor({ deploymentType: 'default', cloudUbbEnabled }));
+
+			const { isActive } = useCloudUbbActive();
+			expect(isActive.value).toBe(false);
+
+			vi.setSystemTime(new Date(ASSISTANT_CLOUD_UBB_GA_DATE.getTime() + 1_000));
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			expect(isActive.value).toBe(false);
+		},
+	);
+
+	test.each([
+		{
+			period: 'before GA with the entitlement',
+			date: new Date('2026-09-15T00:00:00Z'),
+			cloudUbbEnabled: true,
+		},
+		{
+			period: 'after GA without the entitlement',
+			date: new Date('2026-10-02T00:00:00Z'),
+			cloudUbbEnabled: false,
+		},
+	])('reactively follows the deployment type $period', ({ date, cloudUbbEnabled }) => {
+		settingsStore.setSettings(settingsFor({ cloudUbbEnabled }));
+		vi.setSystemTime(date);
+
+		const { isActive } = useCloudUbbActive();
+		expect(isActive.value).toBe(true);
+
+		settingsStore.setSettings(settingsFor({ deploymentType: 'default', cloudUbbEnabled }));
+		expect(isActive.value).toBe(false);
+
+		settingsStore.setSettings(settingsFor({ cloudUbbEnabled }));
 		expect(isActive.value).toBe(true);
 	});
 });

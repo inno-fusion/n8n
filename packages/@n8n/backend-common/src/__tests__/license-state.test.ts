@@ -8,6 +8,8 @@ describe('LicenseState enterprise bypass', () => {
 	const restrictiveFeatures = new Set<string>([
 		LICENSE_FEATURES.API_DISABLED,
 		LICENSE_FEATURES.SHOW_NON_PROD_BANNER,
+		LICENSE_FEATURES.AI_GATEWAY_CLOUD_UBB,
+		LICENSE_FEATURES.AI_ASSISTANT_CLOUD_UBB_ENTITLEMENT,
 	]);
 
 	test('enables every current feature except restrictive flags without a provider', () => {
@@ -22,7 +24,30 @@ describe('LicenseState enterprise bypass', () => {
 		const state = new LicenseState();
 
 		expect(state.isLicensed([LICENSE_FEATURES.SAML, LICENSE_FEATURES.OIDC])).toBe(true);
-		expect(state.isLicensed([LICENSE_FEATURES.SAML, LICENSE_FEATURES.API_DISABLED])).toBe(false);
+		expect(state.isLicensed([LICENSE_FEATURES.SAML, LICENSE_FEATURES.API_DISABLED])).toBe(true);
+		expect(state.isLicensed([LICENSE_FEATURES.SHOW_NON_PROD_BANNER, LICENSE_FEATURES.OIDC])).toBe(
+			true,
+		);
+		expect(
+			state.isLicensed([LICENSE_FEATURES.API_DISABLED, LICENSE_FEATURES.SHOW_NON_PROD_BANNER]),
+		).toBe(false);
+		expect(state.isLicensed([])).toBe(false);
+	});
+
+	test.each([
+		LICENSE_FEATURES.AI_GATEWAY_CLOUD_UBB,
+		LICENSE_FEATURES.AI_ASSISTANT_CLOUD_UBB_ENTITLEMENT,
+	])('delegates cloud billing entitlement %s to the provider', (feature) => {
+		const state = new LicenseState();
+		expect(state.isLicensed(feature)).toBe(false);
+		const provider = mock<LicenseProvider>();
+		state.setLicenseProvider(provider);
+		provider.isLicensed.mockReturnValue(false);
+		expect(state.isLicensed(feature)).toBe(false);
+		provider.isLicensed.mockReturnValue(true);
+		expect(state.isLicensed(feature)).toBe(true);
+		expect(provider.isLicensed).toHaveBeenCalledWith(feature);
+		expect(state.isLicensed([feature, LICENSE_FEATURES.API_DISABLED])).toBe(true);
 	});
 
 	test('returns unlimited values for every current quota without a provider', () => {

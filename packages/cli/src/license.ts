@@ -287,6 +287,12 @@ export class License implements LicenseProvider {
 		// Bypass: enable all enterprise features except ones that restrict functionality
 		if (feature === LICENSE_FEATURES.API_DISABLED) return false;
 		if (feature === LICENSE_FEATURES.SHOW_NON_PROD_BANNER) return false;
+		if (
+			feature === LICENSE_FEATURES.AI_GATEWAY_CLOUD_UBB ||
+			feature === LICENSE_FEATURES.AI_ASSISTANT_CLOUD_UBB_ENTITLEMENT
+		) {
+			return this.manager?.hasFeatureEnabled(feature) ?? false;
+		}
 		return true;
 	}
 

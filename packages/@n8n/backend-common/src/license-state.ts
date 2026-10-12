@@ -31,11 +31,23 @@ export class LicenseState {
 	 * If the feature is an array of strings, it checks if any of the features are licensed
 	 */
 	isLicensed(feature: BooleanLicenseFeature | BooleanLicenseFeature[]) {
-		// Bypass: enable all enterprise features except ones that restrict functionality.
+		// Keep the upstream any-match contract. Restrictive flags stay disabled.
 		const features = Array.isArray(feature) ? feature : [feature];
-		if (features.includes(LICENSE_FEATURES.API_DISABLED)) return false;
-		if (features.includes(LICENSE_FEATURES.SHOW_NON_PROD_BANNER)) return false;
-		return true;
+		return features.some((featureName) => {
+			if (
+				featureName === LICENSE_FEATURES.API_DISABLED ||
+				featureName === LICENSE_FEATURES.SHOW_NON_PROD_BANNER
+			) {
+				return false;
+			}
+			if (
+				featureName === LICENSE_FEATURES.AI_GATEWAY_CLOUD_UBB ||
+				featureName === LICENSE_FEATURES.AI_ASSISTANT_CLOUD_UBB_ENTITLEMENT
+			) {
+				return this.licenseProvider?.isLicensed(featureName) ?? false;
+			}
+			return true;
+		});
 	}
 
 	getValue<T extends keyof FeatureReturnType>(feature: T): FeatureReturnType[T] {

@@ -299,6 +299,22 @@ describe('FrontendService', () => {
 			expect(settings.aiGateway?.enabled).toBe(true);
 		});
 
+		it('keeps configured self-hosted gateway and assistant outside cloud billing', async () => {
+			globalConfig.aiAssistant.baseUrl = 'https://gateway.example.invalid';
+			globalConfig.aiGateway.enabled = true;
+			license.isAiAssistantEnabled.mockReturnValue(true);
+			licenseState.isAiGatewayLicensed.mockReturnValue(true);
+			licenseState.isAiGatewayCloudUbbLicensed.mockReturnValue(false);
+			licenseState.isAiAssistantCloudUbbEntitlementLicensed.mockReturnValue(false);
+			const { service } = createMockService();
+
+			const settings = await service.getSettings();
+
+			expect(settings.aiGateway?.enabled).toBe(true);
+			expect(settings.aiGateway?.cloudUbbEnabled).toBe(false);
+			expect(settings.aiAssistant.cloudUbbEnabled).toBe(false);
+		});
+
 		it('should keep the AI Gateway disabled when configured but not licensed', async () => {
 			globalConfig.aiAssistant.baseUrl = 'https://ai-assistant.n8n.io';
 			globalConfig.aiGateway.enabled = true;

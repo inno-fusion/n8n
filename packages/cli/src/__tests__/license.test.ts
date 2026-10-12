@@ -161,9 +161,22 @@ describe('License', () => {
 		for (const feature of Object.values(LICENSE_FEATURES)) {
 			const expected =
 				feature !== LICENSE_FEATURES.API_DISABLED &&
-				feature !== LICENSE_FEATURES.SHOW_NON_PROD_BANNER;
+				feature !== LICENSE_FEATURES.SHOW_NON_PROD_BANNER &&
+				feature !== LICENSE_FEATURES.AI_GATEWAY_CLOUD_UBB &&
+				feature !== LICENSE_FEATURES.AI_ASSISTANT_CLOUD_UBB_ENTITLEMENT;
 			expect(license.isLicensed(feature)).toBe(expected);
 		}
+	});
+
+	test.each([
+		LICENSE_FEATURES.AI_GATEWAY_CLOUD_UBB,
+		LICENSE_FEATURES.AI_ASSISTANT_CLOUD_UBB_ENTITLEMENT,
+	])('keeps cloud billing entitlement %s tied to its certificate', (feature) => {
+		vi.mocked(LicenseManager.prototype.hasFeatureEnabled).mockReturnValue(false);
+		expect(license.isLicensed(feature)).toBe(false);
+		vi.mocked(LicenseManager.prototype.hasFeatureEnabled).mockReturnValue(true);
+		expect(license.isLicensed(feature)).toBe(true);
+		expect(LicenseManager.prototype.hasFeatureEnabled).toHaveBeenCalledWith(feature);
 	});
 
 	test('returns unlimited values for every license quota', () => {
