@@ -1,4 +1,6 @@
 import formidable from 'formidable';
+import { UnexpectedError } from 'n8n-workflow';
+import { createWriteStream, type WriteStream } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 
@@ -50,6 +52,10 @@ export const createMultiFormDataParser = (maxFormDataSizeInMb: number) => {
 	}> {
 		const { encoding } = req;
 		const temporaryFilePaths = new Set<string>();
+		const temporaryFileClosures = new Map<string, Promise<void>>();
+		const temporaryFileStreams = new Set<WriteStream>();
+		const pendingParts: Array<Promise<void>> = [];
+		let parseFailed = false;
 
 		const form = formidable({
 			multiples: true,
@@ -62,7 +68,32 @@ export const createMultiFormDataParser = (maxFormDataSizeInMb: number) => {
 			// default, and its `minFileSize` default of 1 rejects it again on its own.
 			allowEmptyFiles: true,
 			minFileSize: 0,
-			// TODO: pass a custom `fileWriteStreamHandler` to create binary data files directly
+			fileWriteStreamHandler: (file) => {
+				if (!file || !('filepath' in file) || typeof file.filepath !== 'string') {
+					throw new UnexpectedError('The upload file path is missing.');
+				}
+				const stream = createWriteStream(file.filepath);
+				temporaryFileStreams.add(stream);
+				temporaryFileClosures.set(
+					file.filepath,
+					new Promise<void>((resolve) => {
+						stream.once('close', resolve);
+					}),
+				);
+				if (parseFailed) stream.destroy();
+				return stream;
+			},
+		});
+		const handlePart = form.onPart.bind(form);
+		form.onPart = (part): Promise<void> | void => {
+			if (parseFailed) return;
+			const pending = Promise.resolve(handlePart(part));
+			pendingParts.push(pending);
+			return pending;
+		};
+		form.on('error', () => {
+			parseFailed = true;
+			for (const stream of temporaryFileStreams) stream.destroy();
 		});
 		// Track files when they are created so cleanup does not depend on the normalized field map.
 		form.on('fileBegin', (_formName, file) => temporaryFilePaths.add(file.filepath));
@@ -71,6 +102,8 @@ export const createMultiFormDataParser = (maxFormDataSizeInMb: number) => {
 			await Promise.all(
 				[...temporaryFilePaths].map(async (filePath) => {
 					try {
+						// A pending open can create the path after an early removal.
+						await temporaryFileClosures.get(filePath);
 						await rm(filePath, { force: true });
 					} catch {
 						// Cleanup must not change the webhook response.
@@ -89,6 +122,10 @@ export const createMultiFormDataParser = (maxFormDataSizeInMb: number) => {
 
 			return { body: { data, files }, cleanup };
 		} catch (error) {
+			parseFailed = true;
+			// Finish pending part setup before cleanup takes its file snapshot.
+			await Promise.allSettled(pendingParts);
+			for (const stream of temporaryFileStreams) stream.destroy();
 			await cleanup();
 			throw mapFormParseError(error);
 		}
